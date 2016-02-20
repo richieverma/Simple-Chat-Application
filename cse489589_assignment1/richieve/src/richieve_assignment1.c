@@ -22,9 +22,11 @@
  */
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include "../include/global.h"
 #include "../include/logger.h"
+#include "../include/cs.h"
 
 /**
  * main function
@@ -35,13 +37,23 @@
  */
 int main(int argc, char **argv)
 {
-	/*Init. Logger*/
-	cse4589_init_log(argv[2]);
-
-	/*Clear LOGFILE*/
-	fclose(fopen(LOGFILE, "w"));
-
-	/*Start Here*/
-
-	return 0;
+  /*Init. Logger*/
+  printf("Hello\n");
+  cse4589_init_log(argv[2]);
+  printf("Init Log\n");
+  /*Clear LOGFILE*/
+  fclose(fopen(LOGFILE, "w"));
+  printf("Clear Log \n");
+  /*Start Here*/
+  
+  printf("Argv: %s\n", argv[1]);
+  printf("Argv: %s\n", argv[2]);
+  if (strcmp(argv[1], "s") == 0){
+    server(argv[2]);
+  }
+  
+  else{
+    client(argv[2]);
+  }
+  return 0;
 }
