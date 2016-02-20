@@ -38,16 +38,13 @@
 int main(int argc, char **argv)
 {
   /*Init. Logger*/
-  printf("Hello\n");
   cse4589_init_log(argv[2]);
-  printf("Init Log\n");
+
   /*Clear LOGFILE*/
   fclose(fopen(LOGFILE, "w"));
-  printf("Clear Log \n");
+
   /*Start Here*/
   
-  printf("Argv: %s\n", argv[1]);
-  printf("Argv: %s\n", argv[2]);
   if (strcmp(argv[1], "s") == 0){
     server(argv[2]);
   }

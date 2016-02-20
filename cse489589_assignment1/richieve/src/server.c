@@ -217,9 +217,7 @@ int client(char *port)
   struct addrinfo *p, *res;
   void *addr = NULL;
   
-  printf("ClentHello\n");
   gethostname(host, 64);
-    printf("After\n");
   printf("Hostname: %s\n", host);
   
   //NEED TO FIND CLIENT IP AND PORT
@@ -317,7 +315,7 @@ int client(char *port)
           
           else if (strcmp(command_str, "LOGOUT") == 0){
             close(sockfd);
-            FD_CLR(i, &master);
+            FD_CLR(sockfd, &master);
             cse4589_print_and_log("[%s:SUCCESS]\n", command_str);
             cse4589_print_and_log("[%s:END]\n", command_str);    
           }          
