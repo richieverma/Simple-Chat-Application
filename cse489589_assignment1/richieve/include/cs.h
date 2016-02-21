@@ -4,14 +4,15 @@ int client(char *port);
 
 
 //Struct to store messages in order received
-struct messagesList {
-  char *msg;
-  struct messagesList *next;
+struct messages {
+  char msg[256];
+  struct messages *next;
 };
 
 //Struct for storing the list and stats and pending messages
-struct allClients {
-  char *host, *ip, *port;
-  int msgs_sent, msgs_recv, is_online;
-  struct messagesList *mlist;
+struct Client {
+  char host[30], ip[16];
+  int msgs_sent, msgs_recv, online, csocket, port;
+  struct messages *mlist;
+  struct Client *next, *blocked;
 };

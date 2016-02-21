@@ -30,8 +30,72 @@ void *get_in_addr(struct sockaddr *sa)
   return &(((struct sockaddr_in6*)sa)->sin6_addr);
 }
 
+
+//FIND CLIENT IN LIST BY IP
+struct Client* findClient_ip(struct Client *allClients, char * register_ip){
+  struct Client *temp = NULL;
+  
+  for(temp = allClients; temp != NULL; temp = temp->next){
+    if (strcmp(register_ip, temp->ip) == 0){
+      return temp;
+    }
+  }
+  return temp;
+}
+
+//FIND CLIENT IN LIST BY SOCKET ID
+struct Client* findClient_socket(struct Client *allClients, int socket){
+  struct Client *temp = NULL;
+  
+  for(temp = allClients; temp != NULL; temp = temp->next){
+    if (temp ->csocket == socket){
+      return temp;
+    }
+  }
+  return temp;
+}
+
+
+//REGISTER DETAILS OF NEW CLIENT
+struct Client* registerClient(struct Client *allClients, struct Client *newClient){
+  struct Client *it, *prev;
+  
+  //INSERT IN ORDER OF INCREASING PORT 
+  //IF THERE ARE NO REGISTERED CLIENTS YET
+  if (allClients == NULL){
+    allClients = newClient;
+    return allClients;
+  }
+  
+  //FIRST CLIENT HAS A GREATER PORT THAN THE NEW CLIENT
+  if (allClients->port >= newClient->port){
+    newClient->next = allClients;
+    allClients = newClient;
+    return allClients;
+  }
+  
+  for(it = allClients->next, prev = allClients; it != NULL; it = it->next, prev = prev->next){
+    if (it->port >= newClient->port){
+      break;
+    }
+  }  
+  
+  newClient->next = it;
+  prev->next = newClient;
+  
+  return allClients;
+}
+
+
+
+
+
+
+
+//SERVER
 int server(char *port)
 {
+  struct Client *allClients = NULL;
   
   //Get hostname to use for getaddrinfo
   char *server_port = port, server_ip[INET_ADDRSTRLEN], remoteIP[INET_ADDRSTRLEN], host[64];
@@ -116,11 +180,15 @@ int server(char *port)
   
   fdmax = (server_listener>STDIN?server_listener:STDIN);
   
+  struct timeval tv;
+  tv.tv_sec = 1;
+  tv.tv_usec = 500000;
+  
   char command_str[20];
   
   while(1){
     read_fds = master; // copy it
-    if (select(fdmax+1, &read_fds, NULL, NULL, NULL) == -1) {
+    if (select(fdmax+1, &read_fds, NULL, NULL, &tv) == -1) {
       printf("Select Error\n");
       return 4;
     }
@@ -151,6 +219,18 @@ int server(char *port)
             cse4589_print_and_log("IP:%s\n", server_port);
             cse4589_print_and_log("[%s:END]\n", command_str);            
           } 
+          //LIST
+          else if (strcmp(command_str, "LIST") == 0){
+            cse4589_print_and_log("[%s:SUCCESS]\n", command_str);
+            struct Client *it;
+            int i = 1;
+            for(it = allClients; it != NULL; it = it->next){
+              if (it->online == 1){
+                cse4589_print_and_log("%-5d%-35s%-20s%-8d\n", i++, it->host, it->ip, it->port);
+              }
+            }
+            cse4589_print_and_log("[%s:END]\n", command_str);            
+          }           
         }
         
         // handle new connections
@@ -167,16 +247,16 @@ int server(char *port)
             if (newfd > fdmax) { // keep track of the max
               fdmax = newfd;
             }
-            printf("selectserver: new connection from %s on "
-                   "socket %d\n",
-                   inet_ntop(remoteaddr.ss_family,
-                             get_in_addr((struct sockaddr*)&remoteaddr),
-                             remoteIP, INET_ADDRSTRLEN),
-                   newfd);
+            
+            printf("selectserver: new connection from %s on socket %d\n",
+                  inet_ntop(remoteaddr.ss_family,
+                  get_in_addr((struct sockaddr*)&remoteaddr),
+                  remoteIP, INET_ADDRSTRLEN),newfd);
           }
         } 
         else {
           // handle data from a client
+          memset ( buf, 0, sizeof buf );
           if ((nbytes = recv(i, buf, sizeof buf, 0)) <= 0) {
             // got error or connection closed by client
             if (nbytes == 0) {
@@ -186,12 +266,63 @@ int server(char *port)
             else {
               perror("recv");
             }
+            
+            if (findClient_socket(allClients, i)){
+              findClient_socket(allClients, i)->online = 0;
+            }
             close(i); // bye!
             FD_CLR(i, &master); // remove from master set
           }
           else {
             // we got some data from a client 
             printf("Data from Client: %s\n", buf);
+            char to_be_tokenized[256];
+            strcpy(to_be_tokenized, buf);
+            
+            char *token;
+            token = strtok(to_be_tokenized, " ");
+            if (strcmp(token, "<REGISTER>") == 0){
+              
+              printf("Inside REGISTER HEADER\n");
+              struct Client *c = (struct Client*)malloc(sizeof(struct Client));
+
+              //printf("After memset\n");
+              strcpy(c->ip, strtok(NULL, " "));
+              //printf("After strtok IP:%s\n", c->ip);              
+              strcpy(c->host, strtok(NULL, " "));
+              //printf("After strtok port:%s\n", temp);                            
+              c->port = atoi(strtok(NULL, " "));
+              
+              //printf("After strtok IP:%s HOST:%s PORT:%d\n", c->ip, c->host, c->port);              
+              
+              
+              c->msgs_sent = 0;
+              c->msgs_recv = 0;
+              c->online = 1;
+              c->csocket = i;
+              
+              c->blocked = NULL;
+              c->mlist = NULL;
+              
+              //CHANGE STATUS TO ONLINE IF ALREADY REGISTERED
+              if (findClient_ip(allClients, c->ip)){
+                findClient_ip(allClients, c->ip)->online = 1;
+                free(c);
+              }
+              //REGISTER NEW CLIENT
+              else{
+                allClients = registerClient(allClients, c);
+              }
+              
+              //PRINT ALL CLIENTS
+              struct Client *it;
+              int i = 1;
+              for(it = allClients; it != NULL; it = it->next, i++){
+                printf("%-5d%-35s%-20s%-8d\n", i, it->host, it->ip, it->port);
+              }
+            }               
+          
+            
           }//If data was received or connection was closed
         }//If server_listener
       }//If to check if there is data available on any socket
@@ -206,11 +337,12 @@ int server(char *port)
 
 
 
-
 //CLIENT
 int client(char *port)
 {  
-  char command_str[20], *client_ip, *client_port, host[64];
+  printf("CLIENT PORT: %s\n", port);
+  char command_str[20], client_ip[INET_ADDRSTRLEN], client_port[6], host[64];
+  strcpy(client_port, port);
   int sockfd, status;
   
   struct addrinfo hints;
@@ -220,7 +352,13 @@ int client(char *port)
   gethostname(host, 64);
   printf("Hostname: %s\n", host);
   
-  //NEED TO FIND CLIENT IP AND PORT
+  //FIND CLIENT IP AND PORT
+  struct hostent *he;
+  he = gethostbyname(host);
+  struct in_addr **addr_list;
+  addr_list = (struct in_addr **) he->h_addr_list;
+  strcpy(client_ip , inet_ntoa(*addr_list[0]) );
+  printf("Client_ip: %s Client port:%s\n", client_ip, client_port);  
   
   //SELECT
   fd_set master; // master file descriptor list
@@ -232,9 +370,13 @@ int client(char *port)
   
   FD_SET(STDIN, &master);
   
+  struct timeval tv;
+  tv.tv_sec = 1;
+  tv.tv_usec = 500000;
+  
   while (1){
     read_fds = master; // copy it
-    if (select(fdmax+1, &read_fds, NULL, NULL, NULL) == -1) {
+    if (select(fdmax+1, &read_fds, NULL, NULL, &tv) == -1) {
       int errsv = errno;
       printf("Select Error %d\n", errsv);
       return 4;
@@ -279,7 +421,6 @@ int client(char *port)
                 addr = &(ipv4->sin_addr);
                 // convert the IP to a string and print it
                 inet_ntop(p->ai_family, addr, ipstr, sizeof ipstr);
-                printf(" %s: %s\n", "IPv4", ipstr);
                 break;
               }
               
@@ -304,6 +445,12 @@ int client(char *port)
             }
             FD_SET(sockfd, &master);
             fdmax = (fdmax < sockfd? sockfd: fdmax);
+            
+            char register_string[256];
+              printf("CLIENT PORT TO REGISTER: %s\n", client_port);
+            snprintf(register_string, sizeof(register_string),"<REGISTER> %s %s %s", client_ip, host, client_port);
+            printf("Register String: %s\n", register_string);
+            send(sockfd, register_string, strlen(register_string), 0);
           }
           
           else if (strcmp(command_str, "EXIT") == 0){
