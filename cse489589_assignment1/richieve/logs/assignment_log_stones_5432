@@ -1,4 +1,12 @@
-[LIST:SUCCESS]
-1    highgate.cse.buffalo.edu           128.205.36.33       1111    
-2    euston.cse.buffalo.edu             128.205.36.34       1234    
-[LIST:END]
+[RELAYED:SUCCESS]
+msg from:128.205.36.34, to:255.255.255.255
+[msg]:Hello
+[RELAYED:END]
+[RELAYED:SUCCESS]
+msg from:128.205.36.34, to:255.255.255.255
+[msg]:Hello1
+[RELAYED:END]
+[RELAYED:SUCCESS]
+msg from:128.205.36.34, to:255.255.255.255
+[msg]:Hello2
+[RELAYED:END]

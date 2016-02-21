@@ -11,7 +11,7 @@
 #include <unistd.h>
 #include <arpa/inet.h>
 #include <errno.h>
-
+#include <stdbool.h>
 
 #include "../include/logger.h"
 #include "../include/global.h"
@@ -85,7 +85,50 @@ struct Client* registerClient(struct Client *allClients, struct Client *newClien
   return allClients;
 }
 
+//FUNCTION TO CHECK IF SENDER IS BLOCKED BY RECEIVER
+bool isSenderBlocked(struct Client *sender, struct Client *receiver){
+  struct Client *list = receiver->blocked, *it;
+  
+  for(it = list; it!=NULL; it= it->next){
+    if (strcmp(it->ip, sender->ip) == 0){
+      return true;
+    }
+  }
+  return false;
+}
 
+struct messages * addMsgToList(struct messages *mlist, struct messages *msg){
+  printf("adding message to list\n");
+  
+  if (mlist == NULL){
+    return msg;
+  }
+  
+  if (mlist->next == NULL){
+    mlist->next = msg;
+    return mlist;
+  }
+  
+  else{
+    struct messages *it = mlist;
+    while(it->next != NULL){
+      printf("addMsg Buffared Message: %s\n", it->msg);
+      it = it->next;
+    }
+    it->next = msg;
+  }
+  return mlist;
+}
+
+//RELAY PENDING MESSAGES IF ANY WHEN CLIENT COMES ONLINE
+void relayMessages(struct Client *c){
+  printf("Inside relay messages from list\n");  
+  while(c->mlist != NULL){
+    printf("Buffered Message: %s\n", c->mlist->msg);    
+    send(c->csocket, c->mlist->msg, strlen(c->mlist->msg), 0);
+    c->mlist = c->mlist->next;
+  }
+}
 
 
 
@@ -313,10 +356,20 @@ int server(char *port)
               if (findClient_ip(allClients, c->ip)){
                 findClient_ip(allClients, c->ip)->online = 1;
                 free(c);
+                c = findClient_ip(allClients, c->ip);
               }
               //REGISTER NEW CLIENT
               else{
                 allClients = registerClient(allClients, c);
+              }
+              
+              //Relay all buffered messages
+              //if (c->mlist != NULL){
+              //relayMessages(c);
+              while(c->mlist != NULL){
+                printf("Buffered Message: %s\n", c->mlist->msg);    
+                send(i, c->mlist->msg, strlen(c->mlist->msg), 0);
+                c->mlist = c->mlist->next;
               }
             }
             
@@ -334,6 +387,42 @@ int server(char *port)
                   send(i, send_list, strlen(send_list), 0);
                 }
               } 
+            } 
+            
+            //BROADCAST RECEIVED FROM CLIENT            
+            else if (strcmp(token, "<BROADCAST>") == 0){
+              char msg[256], send_msg[256], header[20];
+              sscanf(buf, "%s %[^\r\n]", header, msg);
+              
+              printf("BROADCAST MESSAGE: %s\n", msg);
+              
+              struct Client *sender = findClient_socket(allClients, i), *it;
+              ++sender->msgs_sent;
+              
+              //TODO CHECK IF sender is blocked by receiver, and if receiver is online
+              snprintf(send_msg, sizeof(send_msg),"<SEND> %s %s", sender->ip, msg);
+              
+              for (it = allClients;it!= NULL; it = it->next){
+                if ((it!= sender) && (!isSenderBlocked(it->blocked, sender))){
+                  printf("Sender not blocked\n");
+                  if (it->online == 1){
+                      send(it->csocket, send_msg, strlen(send_msg), 0);
+                  }
+                  else{
+                    //Buffer it
+                    printf("Buffer message for %s\n", it->ip); 
+                    struct messages *m = (struct messages *)malloc (sizeof (struct messages));
+                    strcpy(m->msg, msg);
+                    m->next = NULL;                    
+                    it->mlist = addMsgToList(it->mlist, m);
+                  }
+                }
+                  
+              }
+              
+              cse4589_print_and_log("[RELAYED:SUCCESS]\n");
+              cse4589_print_and_log("msg from:%s, to:255.255.255.255\n[msg]:%s\n", sender->ip, msg);
+              cse4589_print_and_log("[RELAYED:END]\n");              
             }            
             
             //SEND RECEIVED FROM CLIENT
@@ -347,7 +436,8 @@ int server(char *port)
               struct Client *sender = findClient_socket(allClients, i);
               //TODO CHECK IF sender is blocked by receiver, and if receiver is online
               snprintf(send_msg, sizeof(send_msg),"<SEND> %s %s", sender->ip, msg);
-              send(receiver->csocket, send_msg, strlen(send_msg), 0);
+              
+              send(receiver->csocket, send_msg, strlen(send_msg), 0);                
               cse4589_print_and_log("[RELAYED:SUCCESS]\n");
               cse4589_print_and_log("msg from:%s, to:%s\n[msg]:%s\n", sender->ip, receiver->ip, msg);
               cse4589_print_and_log("[RELAYED:END]\n");              
@@ -474,11 +564,14 @@ int client(char *port)
             FD_SET(sockfd, &master);
             fdmax = (fdmax < sockfd? sockfd: fdmax);
             
+            //LOGIN SUCCESSFUL
+            logged_in_yet = 1;
+            
             char register_string[256];
             snprintf(register_string, sizeof(register_string),"<REGISTER> %s %s %s", client_ip, host, client_port);
             printf("Register String: %s\n", register_string);
             send(sockfd, register_string, strlen(register_string), 0);
-            logged_in_yet == 1;
+            
           }
           
           //EXIT
@@ -491,29 +584,30 @@ int client(char *port)
           }
           
           //LOGOUT
-          else if (strcmp(command_str, "LOGOUT") == 0 && logged_in_yet == 1){
+          else if ((strcmp(command_str, "LOGOUT") == 0) && (logged_in_yet == 1)){
             close(sockfd);
             FD_CLR(sockfd, &master);
+            logged_in_yet == 0;
             cse4589_print_and_log("[%s:SUCCESS]\n", command_str);
             cse4589_print_and_log("[%s:END]\n", command_str);    
           } 
           
           //IP
-          else if (strcmp(command_str, "IP") == 0 && logged_in_yet == 1){
+          else if ((strcmp(command_str, "IP") == 0) && (logged_in_yet == 1)){
             cse4589_print_and_log("[%s:SUCCESS]\n", command_str);
             cse4589_print_and_log("IP:%s\n", client_ip);            
             cse4589_print_and_log("[%s:END]\n", command_str);    
           } 
           
           //PORT
-          else if (strcmp(command_str, "PORT") == 0 && logged_in_yet == 1){
+          else if ((strcmp(command_str, "PORT") == 0) && (logged_in_yet == 1)){
             cse4589_print_and_log("[%s:SUCCESS]\n", command_str);
             cse4589_print_and_log("IP:%s\n", client_port);            
             cse4589_print_and_log("[%s:END]\n", command_str);    
           } 
 
           //BLOCK
-          else if (strcmp(command_str, "BLOCK") == 0 && logged_in_yet == 1){
+          else if ((strcmp(command_str, "BLOCK") == 0) && (logged_in_yet == 1)){
             char block_ip[16], block_string[256];
             
             scanf("%s", block_ip);
@@ -526,7 +620,7 @@ int client(char *port)
           }  
           
           //UNBLOCK
-          else if (strcmp(command_str, "UNBLOCK") == 0 && logged_in_yet == 1){
+          else if ((strcmp(command_str, "UNBLOCK") == 0) && (logged_in_yet == 1)){
             char unblock_ip[16], unblock_string[256];
             
             scanf("%s", unblock_ip);
@@ -539,7 +633,7 @@ int client(char *port)
           } 
           
           //LIST
-          else if (strcmp(command_str, "LIST") == 0 && logged_in_yet == 1){
+          else if ((strcmp(command_str, "LIST") == 0) && (logged_in_yet == 1)){
             cse4589_print_and_log("[%s:SUCCESS]\n", command_str);
             struct Client *it;
             int j = 1;
@@ -550,7 +644,7 @@ int client(char *port)
           }
           
           //REFRESH
-          else if (strcmp(command_str, "REFRESH") == 0 && logged_in_yet == 1){
+          else if ((strcmp(command_str, "REFRESH") == 0) && (logged_in_yet == 1)){
             cse4589_print_and_log("[%s:SUCCESS]\n", command_str);
             onlineClients = NULL;
             send(sockfd, "<REFRESH>", strlen("<REFRESH>"), 0);            
@@ -558,7 +652,7 @@ int client(char *port)
           }           
           
           //BROADCAST
-          else if (strcmp(command_str, "BROADCAST") == 0 && logged_in_yet == 1){
+          else if ((strcmp(command_str, "BROADCAST") == 0) && (logged_in_yet == 1)){
             char broadcast_string[256], send_msg[256];
             fgets (send_msg, 256, stdin);
             
@@ -571,7 +665,7 @@ int client(char *port)
           }          
           
           //SEND
-          else if (strcmp(command_str, "SEND") == 0 && logged_in_yet == 1){
+          else if ((strcmp(command_str, "SEND") == 0) && (logged_in_yet == 1)){
             char send_string[256], send_ip[16], send_msg[256];
             scanf("%s", send_ip);
             fgets (send_msg, 256, stdin);

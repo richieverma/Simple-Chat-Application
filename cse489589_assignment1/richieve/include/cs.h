@@ -6,7 +6,6 @@ int client(char *port);
 //Struct to store messages in order received
 struct messages {
   char msg[256];
-  char sender[16];
   struct messages *next;
 };
 
