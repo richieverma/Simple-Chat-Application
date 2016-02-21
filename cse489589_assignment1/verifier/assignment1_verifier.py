@@ -1,3 +1,26 @@
+#!/usr/bin/python
+#
+# This file is part of CSE 489/589 PA1: Verifier.
+# 
+# CSE 489/589 PA1: Verifier is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Lesser General Public License as
+# published by the Free Software Foundation, either version 3 of
+# the License, or (at your option) any later version.
+# 
+# CSE 489/589 PA1: Verifier is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+# See the GNU Lesser General Public License for more details.
+# 
+# You should have received a copy of the GNU Lesser General Public
+# License along with CSE 489/589 PA1: Verifier. If not, see <http://www.gnu.org/licenses/>.
+# 
+
+__author__ = "Swetank Kumar Saha (swetankk@buffalo.edu)"
+__copyright__ = "Copyright (C) 2016 Swetank Kumar Saha"
+__license__ = "GNU GPL"
+__version__ = "3.1"
+
 import argparse
 
 parser = argparse.ArgumentParser(description='CSE 489/589 PA1: Verifier')
@@ -29,21 +52,32 @@ if __name__ == "__main__":
 
 		matches = re.compile('\['+command+':SUCCESS\]\\n(.*?)\['+command+':END\]\\n', re.DOTALL).search(log_output)
 		
-		if not matches: return "No output detected: Check format/syntax of output."
+		if not matches: 
+			print "\033[91mNo output detected: Check format/syntax of output.\033[0m"
+			return None
 		return matches.group(1)
 
-	s_or_c = 's'
-	port = 4242
+	from assignment1_parser import *
 
-	print "Starting Application as "+s_or_c+" on port:"+str(port)
+	logfile_path = os.path.dirname(args.path[0])+"/logs/assignment_log_"+socket.getfqdn().split('.')[0]
+
+	def parseOutput(output, parse_func):
+		if output:
+			sys.stdout.write('\033[94m'+output+'\033[0m')
+			sys.stdout.flush()
+			print "---------------------------------------"
+			print "I parsed the following from the output:"
+			print '\033[92m'+parse_func()+'\033[0m'
 
 	#Application Startup
 	print
-	print "Application Startup ...",
+	print '\033[33m'+"Application Startup ..."+'\033[0m',
 	sys.stdout.flush()
+	s_or_c = 's'
+	port = 4242
 	command = args.path[0]+" "+s_or_c+" "+str(port)
 	process = subprocess.Popen(command, shell=True, stdout=open(os.devnull, 'w'), stderr=subprocess.STDOUT)
-	time.sleep(2)
+	time.sleep(4)
 	status = procStatus(process.pid)
 	if status == 'R' or status == 'S':
 		os.system('kill -9 '+str(process.pid))
@@ -52,42 +86,61 @@ if __name__ == "__main__":
 		print "FAIL"
 		exit()
 
-	logfile_path = os.path.dirname(args.path[0])+"/logs/assignment_log_"+socket.gethostname()
-	
+
 	#AUTHOR
 	print
-	print "AUTHOR ...",
+	print '\033[33m'+"AUTHOR ..."+'\033[0m',
 	sys.stdout.flush()
+	s_or_c = 's'
+	port = 4242
 	expect_command = "expect -f author.exp "+args.path[0]+" "+s_or_c+" "+str(port)
 	process = subprocess.Popen(expect_command, shell=True, stdout=open(os.devnull, 'w'), stderr=subprocess.STDOUT)
 	time.sleep(2)
+	
+	print
 	print "I got the following output:"
-	print extractOutputSuccess("AUTHOR", logfile_path+"_"+str(port))
+	output = extractOutputSuccess("AUTHOR", logfile_path+"_"+str(port))
+	parseOutput(output, lambda: parseAUTHOR(output))
+
 
 	#IP
 	print
-	print "IP ...",
+	print '\033[33m'+"IP ..."+'\033[0m',
 	sys.stdout.flush()
+	s_or_c = 's'
+	port = 4242
 	expect_command = "expect -f ip.exp "+args.path[0]+" "+s_or_c+" "+str(port)
 	process = subprocess.Popen(expect_command, shell=True, stdout=open(os.devnull, 'w'), stderr=subprocess.STDOUT)
 	time.sleep(3)
+
+	print
 	print "I got the following output:"
-	print extractOutputSuccess("IP", logfile_path+"_"+str(port))
+	output = extractOutputSuccess("IP", logfile_path+"_"+str(port))
+	parseOutput(output, lambda: parseIP(output))
+
 
 	#PORT
 	print
-	print "PORT ...",
+	print '\033[33m'+"PORT ..."+'\033[0m',
 	sys.stdout.flush()
+	s_or_c = 's'
+	port = 4242
 	expect_command = "expect -f port.exp "+args.path[0]+" "+s_or_c+" "+str(port)
 	process = subprocess.Popen(expect_command, shell=True, stdout=open(os.devnull, 'w'), stderr=subprocess.STDOUT)
 	time.sleep(3)
+
+	print
 	print "I got the following output:"
-	print extractOutputSuccess("PORT", logfile_path+"_"+str(port))
+	output = extractOutputSuccess("PORT", logfile_path+"_"+str(port))
+	parseOutput(output, lambda: parsePORT(output))
+	
 
 	#LIST
 	print
-	print "LIST ...",
+	print '\033[33m'+"LIST ..."+'\033[0m',
 	sys.stdout.flush()
+	s_or_c = 's'
+	port = 4242
 	expect_command = "expect -f list_server.exp "+args.path[0]+" "+s_or_c+" "+str(port)
 	server = subprocess.Popen(expect_command, shell=True, stdout=open(os.devnull, 'w'), stderr=subprocess.STDOUT)
 
@@ -95,30 +148,134 @@ if __name__ == "__main__":
 	port = 1111
 	expect_command = "expect -f list_client.exp "+args.path[0]+" "+s_or_c+" "+str(port)
 	client_1 = subprocess.Popen(expect_command, shell=True, stdout=open(os.devnull, 'w'), stderr=subprocess.STDOUT)
+	time.sleep(1)
 	port = 1212
 	expect_command = "expect -f list_client.exp "+args.path[0]+" "+s_or_c+" "+str(port)
 	client_2 = subprocess.Popen(expect_command, shell=True, stdout=open(os.devnull, 'w'), stderr=subprocess.STDOUT)
+	time.sleep(1)
 	port = 1313
 	expect_command = "expect -f list_client.exp "+args.path[0]+" "+s_or_c+" "+str(port)
 	client_3 = subprocess.Popen(expect_command, shell=True, stdout=open(os.devnull, 'w'), stderr=subprocess.STDOUT)
+	time.sleep(1)
 	port = 1414
 	expect_command = "expect -f list_client.exp "+args.path[0]+" "+s_or_c+" "+str(port)
 	client_4 = subprocess.Popen(expect_command, shell=True, stdout=open(os.devnull, 'w'), stderr=subprocess.STDOUT)
-
-	time.sleep(15)
-	print "I got the following output:"
-	print "-On Server-"
-	print extractOutputSuccess("LIST", logfile_path+"_4242")
-	print "-On Client 1-"
-	print extractOutputSuccess("LIST", logfile_path+"_1111")
-	print "-On Client 2-"
-	print extractOutputSuccess("LIST", logfile_path+"_1212")
-	print "-On Client 3-"
-	print extractOutputSuccess("LIST", logfile_path+"_1313")
-	print "-On Client 4-"
-	print extractOutputSuccess("LIST", logfile_path+"_1414")
+	time.sleep(12)
 
 	os.system('kill -9 '+str(client_1.pid))
 	os.system('kill -9 '+str(client_2.pid))
 	os.system('kill -9 '+str(client_3.pid))
 	os.system('kill -9 '+str(client_4.pid))
+
+	print
+	print "I got the following output:"
+	print "-On Server-"
+	output = extractOutputSuccess("LIST", logfile_path+"_4242")
+	parseOutput(output, lambda: parseLIST(output, 'server'))
+		
+	print "-On Client 1-"
+	output = extractOutputSuccess("LIST", logfile_path+"_1111")
+	parseOutput(output, lambda: parseLIST(output, 'client1'))
+
+	print "-On Client 2-"
+	output = extractOutputSuccess("LIST", logfile_path+"_1212")
+	parseOutput(output, lambda: parseLIST(output, 'client2'))
+
+	print "-On Client 3-"
+	output = extractOutputSuccess("LIST", logfile_path+"_1313")
+	parseOutput(output, lambda: parseLIST(output, 'client3'))
+
+	print "-On Client 4-"
+	output = extractOutputSuccess("LIST", logfile_path+"_1414")
+	parseOutput(output, lambda: parseLIST(output, 'client4'))
+
+
+	#SEND
+	print
+	print '\033[33m'+"SEND ..."+'\033[0m',
+	sys.stdout.flush()
+	s_or_c = 's'
+	port = 4242
+	expect_command = "expect -f send_server.exp "+args.path[0]+" "+s_or_c+" "+str(port)
+	server = subprocess.Popen(expect_command, shell=True, stdout=open(os.devnull, 'w'), stderr=subprocess.STDOUT)
+	s_or_c = 'c'
+	port = 1111
+	expect_command = "expect -f send_client.exp "+args.path[0]+" "+s_or_c+" "+str(port)
+	client = subprocess.Popen(expect_command, shell=True, stdout=open(os.devnull, 'w'), stderr=subprocess.STDOUT)
+	time.sleep(8)
+
+	os.system('kill -9 '+str(client.pid))
+
+	print
+	print "I got the following output:"
+	print "-On Server-"
+	output = extractOutputSuccess("RELAYED", logfile_path+"_4242")
+	parseOutput(output, lambda: parseRELAYED(output))
+	print
+	print "-On Client-"
+	output = extractOutputSuccess("RECEIVED", logfile_path+"_1111")
+	parseOutput(output, lambda: parseRECEIVED(output))
+	print
+
+
+	#BROADCAST
+	print
+	print '\033[33m'+"BROADCAST ..."+'\033[0m',
+	sys.stdout.flush()
+	s_or_c = 's'
+	port = 4242
+	expect_command = "expect -f broadcast_server.exp "+args.path[0]+" "+s_or_c+" "+str(port)
+	server = subprocess.Popen(expect_command, shell=True, stdout=open(os.devnull, 'w'), stderr=subprocess.STDOUT)
+	s_or_c = 'c'
+	port = 1111
+	expect_command = "expect -f broadcast_client_1.exp "+args.path[0]+" "+s_or_c+" "+str(port)
+	client_1 = subprocess.Popen(expect_command, shell=True, stdout=open(os.devnull, 'w'), stderr=subprocess.STDOUT)
+	port = 1212
+	expect_command = "expect -f broadcast_client_2.exp "+args.path[0]+" "+s_or_c+" "+str(port)
+	client_2 = subprocess.Popen(expect_command, shell=True, stdout=open(os.devnull, 'w'), stderr=subprocess.STDOUT)
+	time.sleep(10)
+
+	os.system('kill -9 '+str(client_1.pid))
+	os.system('kill -9 '+str(client_2.pid))
+
+	print
+	print "I got the following output:"
+	print "-On Server-"
+	output = extractOutputSuccess("RELAYED", logfile_path+"_4242")
+	parseOutput(output, lambda: parseRELAYED(output))
+	print
+	print "-On Client 1-"
+	output = extractOutputSuccess("RECEIVED", logfile_path+"_1111")
+	parseOutput(output, lambda: parseRECEIVED(output))
+	print
+	print "-On Client 2-"
+	output = extractOutputSuccess("RECEIVED", logfile_path+"_1212")
+	parseOutput(output, lambda: parseRECEIVED(output))
+	print
+
+
+	#STATISTICS
+	print
+	print '\033[33m'+"STATISTICS ..."+'\033[0m',
+	sys.stdout.flush()
+	s_or_c = 's'
+	port = 4242
+	expect_command = "expect -f statistics_server.exp "+args.path[0]+" "+s_or_c+" "+str(port)
+	server = subprocess.Popen(expect_command, shell=True, stdout=open(os.devnull, 'w'), stderr=subprocess.STDOUT)
+	s_or_c = 'c'
+	port = 1111
+	expect_command = "expect -f statistics_client_1.exp "+args.path[0]+" "+s_or_c+" "+str(port)
+	client_1 = subprocess.Popen(expect_command, shell=True, stdout=open(os.devnull, 'w'), stderr=subprocess.STDOUT)
+	port = 1212
+	expect_command = "expect -f statistics_client_2.exp "+args.path[0]+" "+s_or_c+" "+str(port)
+	client_2 = subprocess.Popen(expect_command, shell=True, stdout=open(os.devnull, 'w'), stderr=subprocess.STDOUT)
+	time.sleep(15)
+
+	os.system('kill -9 '+str(client_1.pid))
+	os.system('kill -9 '+str(client_2.pid))
+
+	print
+	print "I got the following output:"
+	output = extractOutputSuccess("STATISTICS", logfile_path+"_4242")
+	parseOutput(output, lambda: parseSTATISTICS(output))
+	print

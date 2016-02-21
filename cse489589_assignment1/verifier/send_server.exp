@@ -8,9 +8,7 @@ set timeout 1
 
 spawn $binary $s_or_c $port
 
-sleep 1
-expect "*" { send "LOGIN 127.0.0.1 4242\n" }
-sleep 1
-expect "*" { send "LIST\n" }
+sleep 5
+expect "*" { send \003 }
 
 interact

@@ -10,7 +10,11 @@ spawn $binary $s_or_c $port
 
 sleep 1
 expect "*" { send "LOGIN 127.0.0.1 4242\n" }
+sleep 3
+expect "*" { send "BROADCAST Hello1!!\n" }
 sleep 1
-expect "*" { send "LIST\n" }
+expect "*" { send "BROADCAST Hello2!!\n" }
+sleep 1
+expect "*" { send "BROADCAST Hello3!!\n" }
 
 interact

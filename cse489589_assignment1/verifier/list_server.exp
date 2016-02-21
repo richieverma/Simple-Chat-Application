@@ -8,7 +8,7 @@ set timeout 1
 
 spawn $binary $s_or_c $port
 
-sleep 10
+sleep 8
 expect "*" { send "LIST\n" }
 sleep 2
 expect "*" { send \003 }

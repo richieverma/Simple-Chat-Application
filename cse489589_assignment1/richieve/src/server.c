@@ -338,7 +338,7 @@ int server(char *port)
             
             //SEND RECEIVED FROM CLIENT
             else if (strcmp(token, "<SEND>") == 0){
-              char send_ip[16], msg[256], header[20];
+              char send_ip[16], msg[256], send_msg[256], header[20];
               sscanf(buf, "%s %s %[^\r\n]", header, send_ip, msg);
               
               printf("SEND MESSAGE: %s %s\n", send_ip, msg);
@@ -346,7 +346,11 @@ int server(char *port)
               struct Client *receiver = findClient_ip(allClients, send_ip);
               struct Client *sender = findClient_socket(allClients, i);
               //TODO CHECK IF sender is blocked by receiver, and if receiver is online
-              send(receiver->csocket, msg, strlen(msg), 0);
+              snprintf(send_msg, sizeof(send_msg),"<SEND> %s %s", sender->ip, msg);
+              send(receiver->csocket, send_msg, strlen(send_msg), 0);
+              cse4589_print_and_log("[RELAYED:SUCCESS]\n");
+              cse4589_print_and_log("msg from:%s, to:%s\n[msg]:%s\n", sender->ip, receiver->ip, msg);
+              cse4589_print_and_log("[RELAYED:END]\n");              
               
             }//Identifying headers in received data               
           }//If data was received or connection was closed
@@ -368,7 +372,7 @@ int client(char *port)
 {  
   struct Client *onlineClients = NULL;
   char command_str[20], client_ip[INET_ADDRSTRLEN], client_port[6], host[64], buf[256];
-  int sockfd, status, nbytes;
+  int sockfd, status, nbytes, logged_in_yet = 0;
   struct addrinfo hints;
   struct addrinfo *p, *res;
   void *addr = NULL;
@@ -474,18 +478,20 @@ int client(char *port)
             snprintf(register_string, sizeof(register_string),"<REGISTER> %s %s %s", client_ip, host, client_port);
             printf("Register String: %s\n", register_string);
             send(sockfd, register_string, strlen(register_string), 0);
+            logged_in_yet == 1;
           }
           
           //EXIT
           else if (strcmp(command_str, "EXIT") == 0){
             close(sockfd);
+            logged_in_yet == 0;
             cse4589_print_and_log("[%s:SUCCESS]\n", command_str);
             cse4589_print_and_log("[%s:END]\n", command_str);    
             return 0;
           }
           
           //LOGOUT
-          else if (strcmp(command_str, "LOGOUT") == 0){
+          else if (strcmp(command_str, "LOGOUT") == 0 && logged_in_yet == 1){
             close(sockfd);
             FD_CLR(sockfd, &master);
             cse4589_print_and_log("[%s:SUCCESS]\n", command_str);
@@ -493,21 +499,21 @@ int client(char *port)
           } 
           
           //IP
-          else if (strcmp(command_str, "IP") == 0){
+          else if (strcmp(command_str, "IP") == 0 && logged_in_yet == 1){
             cse4589_print_and_log("[%s:SUCCESS]\n", command_str);
             cse4589_print_and_log("IP:%s\n", client_ip);            
             cse4589_print_and_log("[%s:END]\n", command_str);    
           } 
           
           //PORT
-          else if (strcmp(command_str, "PORT") == 0){
+          else if (strcmp(command_str, "PORT") == 0 && logged_in_yet == 1){
             cse4589_print_and_log("[%s:SUCCESS]\n", command_str);
             cse4589_print_and_log("IP:%s\n", client_port);            
             cse4589_print_and_log("[%s:END]\n", command_str);    
           } 
 
           //BLOCK
-          else if (strcmp(command_str, "BLOCK") == 0){
+          else if (strcmp(command_str, "BLOCK") == 0 && logged_in_yet == 1){
             char block_ip[16], block_string[256];
             
             scanf("%s", block_ip);
@@ -520,7 +526,7 @@ int client(char *port)
           }  
           
           //UNBLOCK
-          else if (strcmp(command_str, "UNBLOCK") == 0){
+          else if (strcmp(command_str, "UNBLOCK") == 0 && logged_in_yet == 1){
             char unblock_ip[16], unblock_string[256];
             
             scanf("%s", unblock_ip);
@@ -533,7 +539,7 @@ int client(char *port)
           } 
           
           //LIST
-          else if (strcmp(command_str, "LIST") == 0){
+          else if (strcmp(command_str, "LIST") == 0 && logged_in_yet == 1){
             cse4589_print_and_log("[%s:SUCCESS]\n", command_str);
             struct Client *it;
             int j = 1;
@@ -544,7 +550,7 @@ int client(char *port)
           }
           
           //REFRESH
-          else if (strcmp(command_str, "REFRESH") == 0){
+          else if (strcmp(command_str, "REFRESH") == 0 && logged_in_yet == 1){
             cse4589_print_and_log("[%s:SUCCESS]\n", command_str);
             onlineClients = NULL;
             send(sockfd, "<REFRESH>", strlen("<REFRESH>"), 0);            
@@ -552,7 +558,7 @@ int client(char *port)
           }           
           
           //BROADCAST
-          else if (strcmp(command_str, "BROADCAST") == 0){
+          else if (strcmp(command_str, "BROADCAST") == 0 && logged_in_yet == 1){
             char broadcast_string[256], send_msg[256];
             fgets (send_msg, 256, stdin);
             
@@ -565,7 +571,7 @@ int client(char *port)
           }          
           
           //SEND
-          else if (strcmp(command_str, "SEND") == 0){
+          else if (strcmp(command_str, "SEND") == 0 && logged_in_yet == 1){
             char send_string[256], send_ip[16], send_msg[256];
             scanf("%s", send_ip);
             fgets (send_msg, 256, stdin);
@@ -622,6 +628,15 @@ int client(char *port)
               else{
                 onlineClients = registerClient(onlineClients, c);
               }
+            }
+            
+            //MESSAGE RECEIVED FROM ANOTHER CLIENT VIA SERVER
+            else if (strcmp(token, "<SEND>") == 0){
+              char header[20], sender_ip[16], msg[256];
+              sscanf(buf, "%s %s %[^\r\n]", header, sender_ip, msg);
+              cse4589_print_and_log("[RECEIVED:SUCCESS]\n");
+              cse4589_print_and_log("msg from:%s\n[msg]:%s\n", sender_ip, msg);
+              cse4589_print_and_log("[RECEIVED:END]\n");               
             }
           }
         }

@@ -1,14 +1,42 @@
-Version: 1.0
+Version: 3.1
 ------------
 
 - Application Startup -
+Launches application instance as server on port 4242.
+PASS if application keeps running for next 4 seconds, FAIL otherwise.
 
 - AUTHOR -
+Launches application instace as server on port 4242.
+Server executes the 'AUTHOR' command.
 
 - IP -
+Launches application instance as server on port 4242.
+Server executes the 'IP' command.
 
 - PORT -
-
-- LOGIN -
+Launches application instance as server on port 4242.
+Server executes the 'PORT' command.
 
 - LIST -
+Launches 1 application instance as server on port 4242.
+Launches 4 application instances as client on ports 1111, 1212, 1313 and 1414.
+Each of the clients execute 'LOGIN 127.0.0.1 4242' and 'LIST', in increasing order of their port numbers.
+Server executes 'LIST'.
+
+- SEND -
+Launches 1 application instance as server on port 4242.
+Launches 1 application instance as client on port 1111.
+Client LOGINs and executes 'SEND 127.0.0.1 Hello...Wassup!!'.
+
+- BROADCAST -
+Launches 1 application instance as server on port 4242.
+Launches 2 application instances as client on port 1111 and 1212.
+Client1 and Client2 LOGIN.
+Client1 executes 'BROADCAST Hello...Hi!!'.
+
+- STATISTICS -
+Launches 1 application instance as server on port 4242.
+Launches 2 application instances as client on port 1111 and 1212.
+Client1 and Client2 LOGIN.
+Client1 executes 'BROADCAST Hello1!!', 'BROADCAST Hello2!!' and 'BROADCAST Hello3!!'.
+Server executes 'STATISTICS'.
