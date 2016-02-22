@@ -1,12 +1,34 @@
-[RELAYED:SUCCESS]
-msg from:128.205.36.34, to:255.255.255.255
-[msg]:Hello
-[RELAYED:END]
-[RELAYED:SUCCESS]
-msg from:128.205.36.34, to:255.255.255.255
-[msg]:Hello1
-[RELAYED:END]
-[RELAYED:SUCCESS]
-msg from:128.205.36.34, to:255.255.255.255
-[msg]:Hello2
-[RELAYED:END]
+[STATISTICS:SUCCESS]
+[STATISTICS:END]
+[LIST:SUCCESS]
+[LIST:END]
+[STATISTICS:SUCCESS]
+1    highgate.cse.buffalo.edu           0       0       online  
+2    euston.cse.buffalo.edu             0       0       online  
+[STATISTICS:END]
+[LIST:SUCCESS]
+1    highgate.cse.buffalo.edu           128.205.36.33       1111    
+2    euston.cse.buffalo.edu             128.205.36.34       1234    
+[LIST:END]
+[STATISTICS:SUCCESS]
+1    highgate.cse.buffalo.edu           0       0       offline 
+2    euston.cse.buffalo.edu             0       0       online  
+[STATISTICS:END]
+[STATISTICS:SUCCESS]
+1    euston.cse.buffalo.edu             0       0       online  
+[STATISTICS:END]
+[LIST:SUCCESS]
+1    euston.cse.buffalo.edu             128.205.36.34       1234    
+[LIST:END]
+[LIST:SUCCESS]
+1    highgate.cse.buffalo.edu           128.205.36.33       1111    
+2    euston.cse.buffalo.edu             128.205.36.34       1234    
+[LIST:END]
+[LIST:SUCCESS]
+1    euston.cse.buffalo.edu             128.205.36.34       1234    
+[LIST:END]
+[LIST:SUCCESS]
+[LIST:END]
+[STATISTICS:SUCCESS]
+1    euston.cse.buffalo.edu             0       0       offline 
+[STATISTICS:END]
