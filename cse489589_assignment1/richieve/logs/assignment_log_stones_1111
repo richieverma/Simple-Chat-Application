@@ -1,0 +1,16 @@
+[[LOGIN:END]
+[BROADCAST:SUCCESS]
+msg from:128.205.36.46
+[msg]: Hello1!!
+
+[BROADCAST:END]
+[BROADCAST:SUCCESS]
+msg from:128.205.36.46
+[msg]: Hello2!!
+
+[BROADCAST:END]
+[BROADCAST:SUCCESS]
+msg from:128.205.36.46
+[msg]: Hello3!!
+
+[BROADCAST:END]

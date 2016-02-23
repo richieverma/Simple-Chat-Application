@@ -55,7 +55,7 @@ void cse4589_init_log(char* port)
 
 	char* exec_dir = (char*) malloc(PATH_LEN*sizeof(char));
 	bzero(exec_dir, PATH_LEN);
-	memcpy(exec_dir, exec_path, strlen(exec_path)-10);
+	memcpy(exec_dir, exec_path, strlen(exec_path)-12);
 	free(exec_path);
 
 	bzero(LOGFILE, FILEPATH_LEN);
