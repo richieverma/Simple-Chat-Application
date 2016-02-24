@@ -71,3 +71,11 @@ struct bClient* blockClient(struct Client *allClients, struct Client *sender, ch
 //UNBLOCK A CLIENT
 struct bClient* unblockClient(struct Client *allClients, struct Client *sender, char *ip);
 
+//SEND A LIST OF ONLINE CLIENTS
+void sendOnlineClients(struct Client *allClients, int i);
+
+//CREATE SOCKET TO LISTEN FOR INCOMING CONNECTIONS
+int listenSocket(char port[]);
+
+//CONNECT
+int loginClient(char *command_str, char server_host[], char server_port[]);
