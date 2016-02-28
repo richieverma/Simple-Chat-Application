@@ -21,7 +21,6 @@
 #include "../include/cs.h"
 
 #define MAX_PENDING 5
-#define MAX_LINE 256
 #define STDIN 0
 
 //check if IP is valid
@@ -164,9 +163,9 @@ struct messages * addMsgToList(struct messages *mlist, struct messages *msg){
 void relayMessages(struct Client *c){
   while(c->mlist != NULL){ 
     send(c->csocket, c->mlist->send_msg, strlen(c->mlist->send_msg), 0);
-    cse4589_print_and_log("[RELAYED:SUCCESS]\n");
-    cse4589_print_and_log("msg from:%s, to:255.255.255.255\n[msg]:%s\n", c->mlist->sender, c->mlist->msg);
-    cse4589_print_and_log("[RELAYED:END]\n");         
+    //cse4589_print_and_log("[RELAYED:SUCCESS]\n");
+    //cse4589_print_and_log("msg from:%s, to:255.255.255.255\n[msg]:%s\n", c->mlist->sender, c->mlist->msg);
+    //cse4589_print_and_log("[RELAYED:END]\n");         
     c->mlist = c->mlist->next;
     ++c->msgs_recv;
   }
@@ -226,9 +225,21 @@ struct bClient* blockClient(struct Client *allClients, struct Client *sender, ch
     send(sender->csocket, "<BLOCK SUCCESS>", strlen("<BLOCK SUCCESS>"), 0);             
     return to_be_blocked;
   }
-  while(it->next != NULL){
+
+  while(it->next != NULL && it->next->port < to_be_blocked->port ){
     it = it->next;
   }
+  
+  if (it->port < to_be_blocked->port){
+    to_be_blocked->next = it->next;
+    it->next = to_be_blocked;
+  }
+  
+  else{
+    to_be_blocked->next = it;
+    it = to_be_blocked;
+  }
+  
   send(sender->csocket, "<BLOCK SUCCESS>", strlen("<BLOCK SUCCESS>"), 0);
   it->next = to_be_blocked;
   return sender->blocked;  
@@ -267,7 +278,7 @@ struct bClient* unblockClient(struct Client *allClients, struct Client *sender, 
 //SEND A LIST OF ONLINE CLIENTS
 void sendOnlineClients(struct Client *allClients, int i){
   //Send List of all online Clients
-  char send_list[256];
+  char send_list[300];
   struct Client *it;
   for(it = allClients; it != NULL; it = it->next){
     if (it->online == 1){
@@ -356,7 +367,7 @@ int server(char *port)
   char *server_port = port, server_ip[INET_ADDRSTRLEN], remoteIP[INET_ADDRSTRLEN], host[64];
   int status;
   gethostname(host, 64);
-  printf("Hostname: %s\n", host);
+  //printf("Hostname: %s\n", host);
   
   //FIND SERVER IP FROM HOSTNAME
   struct hostent *he;
@@ -364,75 +375,11 @@ int server(char *port)
   struct in_addr **addr_list;
   addr_list = (struct in_addr **) he->h_addr_list;
   strcpy(server_ip , inet_ntoa(*addr_list[0]) );
-  printf("Server_ip: %s Server port:%s\n", server_ip, server_port);   
+  //printf("Server_ip: %s Server port:%s\n", server_ip, server_port);   
   
-  /*
-  struct addrinfo hints, *p, *res;
-  
-  
-  memset(&hints, 0, sizeof hints);
-  hints.ai_family = AF_INET; // don't care IPv4 or IPv6
-  hints.ai_socktype = SOCK_STREAM; // TCP stream sockets
-  hints.ai_flags = AI_PASSIVE; // fill in my IP for me
-  
-  
-  //GETADDRINFO
-  
-  if ((status = getaddrinfo(NULL, server_port, &hints, &res)) != 0) {
-    fprintf(stderr, "getaddrinfo error: %s\n", gai_strerror(status));
-    exit(1);
-  }
-  
-  void *addr = NULL;
-  char *ipver = NULL;
-  
-  for(p = res;p != NULL; p = p->ai_next) {
-    if (p->ai_family == AF_INET) { // IPv4
-      struct sockaddr_in *ipv4 = (struct sockaddr_in *)p->ai_addr;
-      addr = &(ipv4->sin_addr);
-      // convert the IP to a string
-      //inet_ntop(p->ai_family, addr, server_ip, sizeof server_ip);
-      break;
-    }
-  }
-  
-  if (p == NULL){
-    printf("Getaddrinfo Error\n");
-    return 1;
-  }
-  
-  //freeaddrinfo(res); // free the linked list
-  
-  //SOCKET
-  int server_listener;
-  if ((server_listener = socket(p->ai_family, p->ai_socktype, p->ai_protocol)) == -1)
-  {
-    int errsv = errno;
-    printf("Socket Error: %d\n", errsv);
-    return errsv;    
-  }
-
-  // set SO_REUSEADDR on a socket to true (1) to reuse the same address:
-  int optval = 1;
-  setsockopt(server_listener, SOL_SOCKET, SO_REUSEADDR, &optval, sizeof optval);
-  
-  //BIND
-  if (bind(server_listener, p->ai_addr, p->ai_addrlen)== -1){
-    int errsv = errno;
-    printf("Bind Error: %d\n", errsv);  
-    return errsv;
-  }
-  
-  //LISTEN
-  if (listen(server_listener, MAX_PENDING) == -1){
-    int errsv = errno;
-    printf("Listen Error: %d\n", errsv);  
-    return errsv;    
-  }
-  */
   int server_listener = listenSocket(server_port);
   
-  //SELECT
+  //SELECT BeejGuide Section 7.2
   fd_set master; // master file descriptor list
   fd_set read_fds; // temp file descriptor list for select()
   int fdmax; // maximum file descriptor number
@@ -466,7 +413,6 @@ int server(char *port)
     // run through the existing connections looking for data to read
     for(int i = 0; i <= fdmax; i++) {
       if (FD_ISSET(i, &read_fds)) { // we got one!!
-        printf("We got one!\n");
         if (i == STDIN){
           scanf("%s", command_str); // Read data from STDIN
           
@@ -490,12 +436,21 @@ int server(char *port)
             cse4589_print_and_log("PORT:%s\n", server_port);
             cse4589_print_and_log("[%s:END]\n", command_str);            
           } 
+          
           //BLOCKED
           else if (strcmp(command_str, "BLOCKED") == 0){
             char ip_blocked[16];
             scanf("%s", ip_blocked);
             printBlocked(allClients, ip_blocked);
           } 
+          
+          //EXIT
+          else if (strcmp(command_str, "EXIT") == 0){
+            close(server_listener);
+            cse4589_print_and_log("[%s:SUCCESS]\n", command_str);
+            cse4589_print_and_log("[%s:END]\n", command_str);    
+            return 0;
+          }          
           
           //STATISTICS
           else if (strcmp(command_str, "STATISTICS") == 0){
@@ -518,7 +473,7 @@ int server(char *port)
         
         // handle new connections
         else if (i == server_listener) {
-          printf("Incoming Connection\n");
+          //printf("Incoming Connection\n");
           addrlen = sizeof remoteaddr;
           //ACCEPT
           newfd = accept(server_listener, (struct sockaddr *)&remoteaddr, &addrlen);
@@ -532,10 +487,10 @@ int server(char *port)
               fdmax = newfd;
             }
             
-            printf("selectserver: new connection from %s on socket %d\n",
-                   inet_ntop(remoteaddr.ss_family,
-                             get_in_addr((struct sockaddr*)&remoteaddr),
-                             remoteIP, INET_ADDRSTRLEN),newfd);
+            //printf("selectserver: new connection from %s on socket %d\n",
+                   //inet_ntop(remoteaddr.ss_family,
+                     //        get_in_addr((struct sockaddr*)&remoteaddr),
+                       //      remoteIP, INET_ADDRSTRLEN),newfd);
           }
         } 
         
@@ -546,23 +501,23 @@ int server(char *port)
             // got error or connection closed by client
             if (nbytes == 0) {
               // connection closed
-              printf("selectserver: socket %d hung up\n", i);
+              //printf("selectserver: socket %d hung up\n", i);
             }
             else {
-              perror("recv");
+              printf("Error from Client\n");
             }
             
             if (findClient_socket(allClients, i)){
+              //REMOVE CLIENT FROM ALLCLIENTS LIST              
               allClients = removeClient(allClients, findClient_socket(allClients, i));
-              //TODO REMOVE CLIENT FROM ALLCLIENTS LIST
             }
             close(i); // bye!
             FD_CLR(i, &master); // remove from master set
           }
           else {
             // we got some data from a client 
-            printf("Data from Client: %s\n", buf);
-            char to_be_tokenized[256];
+            //printf("Data from Client: %s\n", buf);
+            char to_be_tokenized[300];
             strcpy(to_be_tokenized, buf);
             
             char *token;
@@ -584,7 +539,7 @@ int server(char *port)
                 struct sockaddr_in *s = (struct sockaddr_in *)&addr;
                 port = ntohs(s->sin_port);
                 inet_ntop(AF_INET, &s->sin_addr, ipstr, sizeof ipstr);
-                printf("GETPEERIP: %s\n", ipstr);
+                //printf("GETPEERIP: %s\n", ipstr);
               }
               
               //Populate new Client to register
@@ -654,30 +609,31 @@ int server(char *port)
             
             //BROADCAST RECEIVED FROM CLIENT            
             else if (strcmp(token, "<BROADCAST>") == 0){
-              char msg[256], send_msg[256], header[20];
+              char msg[300], send_msg[300], header[20];
               sscanf(buf, "%s %[^\r\n]", header, msg);
               
-              printf("BROADCAST MESSAGE: %s\n", msg);
+              //printf("BROADCAST MESSAGE: %s\n", msg);
               
               struct Client *sender = findClient_socket(allClients, i), *it;
               ++sender->msgs_sent;
               
               //TODO CHECK IF sender is blocked by receiver, and if receiver is online
               snprintf(send_msg, sizeof(send_msg),"<SEND> %s %s", sender->ip, msg);
+              cse4589_print_and_log("[RELAYED:SUCCESS]\n");
+              cse4589_print_and_log("msg from:%s, to:255.255.255.255\n[msg]:%s\n", sender->ip, msg);
+              cse4589_print_and_log("[RELAYED:END]\n");               
               
               for (it = allClients;it!= NULL; it = it->next){
                 if ((it->csocket != sender->csocket) && (!isSenderBlocked(sender->ip, it))){
-                  printf("Sender not blocked\n");
+                  //printf("Sender not blocked\n");
                   if (it->online == 1){
                     send(it->csocket, send_msg, strlen(send_msg), 0);
-                    cse4589_print_and_log("[RELAYED:SUCCESS]\n");
-                    cse4589_print_and_log("msg from:%s, to:255.255.255.255\n[msg]:%s\n", sender->ip, msg);
-                    cse4589_print_and_log("[RELAYED:END]\n");     
+    
                     it->msgs_recv = it->msgs_recv + 1;                    
                   }
                   else{
                     //Buffer it
-                    printf("Buffer message for %s\n", it->ip); 
+                    //printf("Buffer message for %s\n", it->ip); 
                     struct messages *m = (struct messages *)malloc (sizeof (struct messages));
                     strcpy(m->msg, msg);
                     strcpy(m->send_msg, send_msg);
@@ -691,10 +647,10 @@ int server(char *port)
             
             //SEND RECEIVED FROM CLIENT
             else if (strcmp(token, "<SEND>") == 0){
-              char send_ip[16], msg[256], send_msg[300], header[20];
+              char send_ip[16], msg[300], send_msg[300], header[20];
               sscanf(buf, "%s %s %[^\r\n]", header, send_ip, msg);
               
-              printf("SEND MESSAGE: %s %s\n", send_ip, msg);
+              //printf("SEND MESSAGE: %s %s\n", send_ip, msg);
               
               struct Client *receiver = findClient_ip(allClients, send_ip);
               struct Client *sender = findClient_socket(allClients, i);
@@ -702,18 +658,19 @@ int server(char *port)
               //TODO CHECK IF sender is blocked by receiver, and if receiver is online
               snprintf(send_msg, sizeof(send_msg),"<SEND> %s %s", sender->ip, msg);
               
+              cse4589_print_and_log("[RELAYED:SUCCESS]\n");
+              cse4589_print_and_log("msg from:%s, to:%s\n[msg]:%s\n", sender->ip, receiver->ip, msg);
+              cse4589_print_and_log("[RELAYED:END]\n"); 
+              
               if (!isSenderBlocked(sender->ip, receiver)){
-                printf("Sender not blocked\n");
+                //printf("Sender not blocked\n");
                 if (receiver->online == 1){
-                  send(receiver->csocket, send_msg, strlen(send_msg), 0);
-                  cse4589_print_and_log("[RELAYED:SUCCESS]\n");
-                  cse4589_print_and_log("msg from:%s, to:%s\n[msg]:%s\n", sender->ip, receiver->ip, msg);
-                  cse4589_print_and_log("[RELAYED:END]\n");  
+                  send(receiver->csocket, send_msg, strlen(send_msg), 0); 
                   receiver->msgs_recv = receiver->msgs_recv + 1;
                 }
                 else{
                   //Buffer it
-                  printf("Buffer message for %s\n", receiver->ip); 
+                  //printf("Buffer message for %s\n", receiver->ip); 
                   struct messages *m = (struct messages *)malloc (sizeof (struct messages));
                   strcpy(m->msg, msg);
                   strcpy(m->send_msg, send_msg);
@@ -770,7 +727,7 @@ int loginClient(char *command_str, char server_host[], char server_port[]){
       addr = &(ipv4->sin_addr);
       // convert the IP to a string and print it
       inet_ntop(p->ai_family, addr, ipstr, sizeof ipstr);
-      printf("IPSTR: %s\n", ipstr);
+      //printf("IPSTR: %s\n", ipstr);
       break;
     }
     
@@ -810,7 +767,7 @@ int loginClient(char *command_str, char server_host[], char server_port[]){
 int client(char *port)
 {  
   struct Client *onlineClients = NULL;
-  char command_str[20], client_ip[INET_ADDRSTRLEN], client_port[6], host[64], buf[256], remoteIP[INET_ADDRSTRLEN];
+  char command_str[20], client_ip[INET_ADDRSTRLEN], client_port[6], host[64], buf[300], remoteIP[INET_ADDRSTRLEN];
   int sockfd, status, cstatus, nbytes, logged_in_yet = 0, cport = atoi(client_port);
   struct addrinfo hints, *p, *res;
   void *addr = NULL;
@@ -820,7 +777,7 @@ int client(char *port)
   
   strcpy(client_port, port);
   gethostname(host, 64);
-  printf("Hostname: %s\n", host);
+  //printf("Hostname: %s\n", host);
   
   //FIND CLIENT IP
   struct hostent *he;
@@ -828,88 +785,29 @@ int client(char *port)
   struct in_addr **addr_list;
   addr_list = (struct in_addr **) he->h_addr_list;
   strcpy(client_ip , inet_ntoa(*addr_list[0]) ); 
-  printf("Client_ip: %s Client port:%s\n", client_ip, client_port);  
+  //printf("Client_ip: %s Client port:%s\n", client_ip, client_port);  
     
   //File
-  int fsize = 0, remain_data = 0;
+  int filesize = 0, remain_data = 0;
   FILE * f_recv;
   char filename_recv[50], header[30];
   
   //MAKE CLIENT LISTEN
-  /*
-  struct addrinfo chints, *cp, *cres;
-  
-  memset(&chints, 0, sizeof (chints));
-  chints.ai_family = AF_INET; // don't care IPv4 or IPv6
-  chints.ai_socktype = SOCK_STREAM; // TCP stream sockets
-  chints.ai_flags = AI_PASSIVE; // fill in my IP for me
-  
-  //GETADDRINFO
-  
-  if ((cstatus = getaddrinfo(NULL, client_port, &chints, &cres)) != 0) {
-    fprintf(stderr, "getaddrinfo error: %s\n", gai_strerror(status));
-    exit(1);
-  }
-  
-  for(cp = cres;cp != NULL; cp = cp->ai_next) {
-    if (cp->ai_family == AF_INET) { // IPv4
-      struct sockaddr_in *ipv4 = (struct sockaddr_in *)p->ai_addr;
-      addr = &(ipv4->sin_addr);
-      // convert the IP to a string
-      //inet_ntop(p->ai_family, addr, server_ip, sizeof server_ip);
-      break;
-    }
-  }
-  
-  if (cp == NULL){
-    printf("Getaddrinfo Error\n");
-    return 1;
-  }
-  
-  //freeaddrinfo(res); // free the linked list
-  //SOCKET
-  int client_listener;
-  if ((client_listener = socket(cp->ai_family, cp->ai_socktype, cp->ai_protocol)) == -1)
-  {
-    int errsv = errno;
-    printf("Socket Error: %d\n", errsv);
-    return errsv;    
-  }
-  
-  // set SO_REUSEADDR on a socket to true (1) to reuse the same address:
-  int optval = 1;
-  setsockopt(client_listener, SOL_SOCKET, SO_REUSEADDR, &optval, sizeof optval);
-  
-  //BIND
-  if (bind(client_listener, cp->ai_addr, cp->ai_addrlen)== -1){
-    int errsv = errno;
-    printf("Bind Error: %d\n", errsv);  
-    return errsv;
-  }
-  
-  //LISTEN
-  if (listen(client_listener, MAX_PENDING) == -1){
-    int errsv = errno;
-    printf("Listen Error: %d\n", errsv);  
-    return errsv;    
-  }
-  */
-  //END MAKE CLIENT LISTEN
-
   int client_listener = listenSocket(client_port);
   
-    printf("Listening before select");
-  //SELECT
+  //SELECT Beej Guide Section 7.2
   fd_set master; // master file descriptor list
   fd_set read_fds; // temp file descriptor list for select()
-  int fdmax = client_listener; // maximum file descriptor number
+  int fdmax = 0; // maximum file descriptor number
   
   FD_ZERO(&master); // clear the master and temp sets
   FD_ZERO(&read_fds);
   
   FD_SET(STDIN, &master);
-  FD_SET(client_listener, &master);
-  
+  if (client_listener > 0){
+    FD_SET(client_listener, &master);
+    fdmax = client_listener;
+  }
   struct timeval tv;
   tv.tv_sec = 1;
   tv.tv_usec = 500000;
@@ -937,74 +835,6 @@ int client(char *port)
           
           //LOGIN
           else if (strcmp(command_str, "LOGIN") == 0){
-            /*
-            char server_host[INET_ADDRSTRLEN];
-            char server_port[5], ipstr[INET_ADDRSTRLEN];
-            
-            scanf("%s %s", server_host, server_port);
-            
-            if (!checkIpPort(server_host, atoi(server_port))){
-              cse4589_print_and_log("[%ERROR]\n", command_str);
-              cse4589_print_and_log("[%s:END]\n", command_str);               
-            }
-            
-            memset(&hints, 0, sizeof hints);
-            hints.ai_family = AF_UNSPEC; // don't care IPv4 or IPv6
-            hints.ai_socktype = SOCK_STREAM; // TCP stream sockets
-            hints.ai_flags = AI_PASSIVE; // fill in my IP for me
-            
-            //GETADDRINFO
-            
-            if ((status = getaddrinfo(server_host, server_port, &hints, &res)) != 0) {
-              fprintf(stderr, "getaddrinfo error: %s\n", gai_strerror(status));
-              cse4589_print_and_log("[%ERROR]\n", command_str);
-              cse4589_print_and_log("[%s:END]\n", command_str);               
-              continue;
-            }
-            
-            for(p = res;p != NULL; p = p->ai_next) {
-              if (p->ai_family == AF_INET ) { // IPv4
-                struct sockaddr_in *ipv4 = (struct sockaddr_in *)p->ai_addr;
-                addr = &(ipv4->sin_addr);
-                // convert the IP to a string and print it
-                inet_ntop(p->ai_family, addr, ipstr, sizeof ipstr);
-                printf("IPSTR: %s\n", ipstr);
-                break;
-              }
-              
-            }
-            
-            //freeaddrinfo(res); // free the linked list
-            
-            //SOCKET
-            
-            if ((sockfd = socket(p->ai_family, p->ai_socktype, p->ai_protocol)) == -1)
-            {
-              int errsv = errno;
-              printf("Socket Error: %d\n", errsv);
-              cse4589_print_and_log("[%ERROR]\n", command_str);
-              cse4589_print_and_log("[%s:END]\n", command_str);               
-              continue;
-              //return errsv;    
-            }
-            
-             
- 
-            if (p== NULL){
-              printf("P is NULL");
-            }
-            
-            //CONNECT
-            if (connect(sockfd, p->ai_addr, p->ai_addrlen)== -1){
-              int errsv = errno;
-              printf("Connect Error: %d\n", errsv);  
-              close(sockfd);
-              cse4589_print_and_log("[%ERROR]\n", command_str);
-              cse4589_print_and_log("[%s:END]\n", command_str);               
-              continue;
-              //return errsv;
-            }
-            */
             char server_host[INET_ADDRSTRLEN];
             char server_port[5];
             scanf("%s %s", server_host, server_port);
@@ -1012,16 +842,16 @@ int client(char *port)
               continue;
             } 
 
-            
+            onlineClients = NULL;
             FD_SET(sockfd, &master);
             fdmax = (fdmax < sockfd? sockfd: fdmax);
             
             //LOGIN SUCCESSFUL
             logged_in_yet = 1;
             
-            char register_string[256];
+            char register_string[300];
             snprintf(register_string, sizeof(register_string),"<REGISTER> %s %s %s", client_ip, host, client_port);
-            printf("Register String: %s\n", register_string);
+            //printf("Register String: %s\n", register_string);
             if (send(sockfd, register_string, strlen(register_string), 0) == -1){
               close(sockfd);
               cse4589_print_and_log("[%s:ERROR]\n", command_str);
@@ -1068,13 +898,13 @@ int client(char *port)
           //PORT
           else if ((strcmp(command_str, "PORT") == 0) && (logged_in_yet == 1)){
             cse4589_print_and_log("[%s:SUCCESS]\n", command_str);
-            cse4589_print_and_log("IP:%s\n", client_port);            
+            cse4589_print_and_log("PORT:%s\n", client_port);            
             cse4589_print_and_log("[%s:END]\n", command_str);    
           } 
           
           //BLOCK
           else if ((strcmp(command_str, "BLOCK") == 0) && (logged_in_yet == 1)){
-            char block_ip[16], block_string[256];
+            char block_ip[16], block_string[300];
             scanf("%s", block_ip);
             
             if (findClient_ip(onlineClients, block_ip) == NULL){
@@ -1093,7 +923,7 @@ int client(char *port)
           
           //UNBLOCK
           else if ((strcmp(command_str, "UNBLOCK") == 0) && (logged_in_yet == 1)){
-            char unblock_ip[16], unblock_string[256];
+            char unblock_ip[16], unblock_string[300];
             scanf("%s", unblock_ip);
             if (findClient_ip(onlineClients, unblock_ip) == NULL){
               cse4589_print_and_log("[%s:ERROR]\n", command_str);          
@@ -1101,7 +931,7 @@ int client(char *port)
             }
             else{            
               snprintf(unblock_string, sizeof(unblock_string),"<UNBLOCK> %s", unblock_ip);
-              printf("Send String: %s\n", unblock_string);            
+              //printf("Send String: %s\n", unblock_string);            
               if (send(sockfd, unblock_string, strlen(unblock_string), 0) == -1){
                 cse4589_print_and_log("[%s:ERROR]\n", command_str);          
                 cse4589_print_and_log("[%s:END]\n", command_str);                  
@@ -1137,8 +967,8 @@ int client(char *port)
           
           //BROADCAST
           else if ((strcmp(command_str, "BROADCAST") == 0) && (logged_in_yet == 1)){
-            char broadcast_string[256], send_msg[256];
-            fgets (send_msg, 256, stdin);
+            char broadcast_string[300], send_msg[300];
+            fgets (send_msg, 300, stdin);
             
             //REMOVE TRAILING NEWLINE CHAR
             if (send_msg[strlen(send_msg) - 1] == '\n'){
@@ -1146,11 +976,10 @@ int client(char *port)
             }
             
             snprintf(broadcast_string, sizeof(broadcast_string),"<BROADCAST> %s", send_msg);
-            printf("Send String: %s\n", broadcast_string);
+            //printf("Send String: %s\n", broadcast_string);
             
             if (send(sockfd, broadcast_string, strlen(broadcast_string), 0) != -1){
-              cse4589_print_and_log("[%s:SUCCESS]\n", command_str);   
-              cse4589_print_and_log("msg from:%s\n[msg]:%s\n", client_ip, send_msg);              
+              cse4589_print_and_log("[%s:SUCCESS]\n", command_str);               
               cse4589_print_and_log("[%s:END]\n", command_str);    
             }
             else{
@@ -1161,9 +990,9 @@ int client(char *port)
           
           //SEND
           else if ((strcmp(command_str, "SEND") == 0) && (logged_in_yet == 1)){
-            char send_string[256], send_ip[16], send_msg[256];
+            char send_string[300], send_ip[16], send_msg[300];
             scanf("%s", send_ip);
-            fgets (send_msg, 256, stdin);
+            fgets (send_msg, 300, stdin);
             
             //REMOVE TRAILING NEWLINE CHAR
             if (send_msg[strlen(send_msg) - 1] == '\n'){
@@ -1177,7 +1006,7 @@ int client(char *port)
             }
             else{             
               snprintf(send_string, sizeof(send_string),"<SEND> %s %s", send_ip, send_msg);
-              printf("Send String: %s\n", send_string);
+              //printf("Send String: %s\n", send_string);
               if (send(sockfd, send_string, strlen(send_string), 0) != -1){
                 cse4589_print_and_log("[%s:SUCCESS]\n", command_str);
                 cse4589_print_and_log("[%s:END]\n", command_str); 
@@ -1190,7 +1019,6 @@ int client(char *port)
           }
           //SENDFILE
           else if ((strcmp(command_str, "SENDFILE") == 0) && (logged_in_yet == 1)){
-            printf("Sendfile\n");
             char file_send_ip[16], filename_send[50], file_send_port[6];
             scanf("%s %s", file_send_ip, filename_send);
 
@@ -1199,25 +1027,25 @@ int client(char *port)
             
             int sockfilesend = loginClient("SENDFILE", file_send_client->ip, file_send_port);
             
-            //TODO READ FILE AND SEND TO THIS SOCKET
+            //READ FILE AND SEND TO THIS SOCKET
             int f = open(filename_send, O_RDONLY);
             struct stat file_stat;
             fstat(f, &file_stat);
             char file_details[20];
             sprintf(file_details,"<FILE> %d %s",file_stat.st_size, filename_send);
             
+            //Send filesize, filename to client
             send(sockfilesend, file_details, strlen(file_details), 0);
             usleep(100000);
             
-            int sent_bytes = 0;
-            int remain_data = file_stat.st_size;
+            int bytes_sent = 0; // Sent so far
+            int to_be_sent = file_stat.st_size; //Total bytes to be sent
             off_t offset = 0;
-            /* Sending file data */
-            while (((sent_bytes = sendfile(sockfilesend, f, &offset, 256)) > 0) && (remain_data > 0))
+            
+            /* Keep sending data till there is no data left to be sent ie to_be_sent=0 */
+            while (((bytes_sent = sendfile(sockfilesend, f, &offset, 256)) > 0) && (to_be_sent > 0))
             {
-              fprintf(stdout, "1. Server sent %d bytes from file's data, offset is now : %d and remaining data = %d\n", sent_bytes, offset, remain_data);
-              remain_data -= sent_bytes;
-              fprintf(stdout, "2. Server sent %d bytes from file's data, offset is now : %d and remaining data = %d\n", sent_bytes, offset, remain_data);
+              to_be_sent -= bytes_sent;
             }
             
             cse4589_print_and_log("[%s:SUCCESS]\n", command_str);         
@@ -1228,7 +1056,7 @@ int client(char *port)
         }//Check if input is from STDIN or other socket
         //Handle new connection for sending file
         else if (i == client_listener){
-          printf("Incoming Connection\n");
+          //printf("Incoming Connection\n");
           addrlen = sizeof remoteaddr;
           //ACCEPT
           filefd = accept(client_listener, (struct sockaddr *)&remoteaddr, &addrlen);
@@ -1255,7 +1083,7 @@ int client(char *port)
               printf("selectclient: server hung up\n");
             }
             else {
-              perror("recv");
+              printf("Error from client\n");
             }
             
             close(i); // bye!
@@ -1264,38 +1092,37 @@ int client(char *port)
           else{
             
             // we got some data for file transfer 
-            printf("Data from Client for file transfer: %s\n", buf);
-            char to_be_tokenized[256];
+            //printf("Data from Client for file transfer: %s\n", buf);
+            char to_be_tokenized[300];
             strcpy(to_be_tokenized, buf);
             
             char token[30];
             //token = strtok(to_be_tokenized, " ");
             sscanf(buf, "%s ", token);
-            printf("Token:%s\n", token);
+            
             if (strcmp(token, "<FILE>") == 0){
               char sfsize[30];
-              printf("Need to open file\n");
               sscanf(buf, "%s %s %[^\r\n]", header, sfsize, filename_recv);
-              fsize = atoi(sfsize);
-              printf("file to be opened: %s with size %d\n", filename_recv, fsize);
+              filesize = atoi(sfsize); //Total size of file
+              //printf("file to be opened: %s with size %d\n", filename_recv, filesize);
               f_recv = fopen(filename_recv, "w");
+              
               if (f_recv == NULL)
               {
-                printf("Failed to open file foo\n");
+                printf("File could not be opened.\n");
                 
                 continue;
               }              
-              printf("file opened\n");
-              remain_data = fsize;
+              //printf("file opened\n");
+              remain_data = filesize;
             }
             else{
               //Received file contents  
-              printf("Received file contents of size %d remaining: %s\n", remain_data, buf);
               
               if (remain_data > 0){
                 fwrite(buf, sizeof(char), nbytes, f_recv);
                 remain_data -= nbytes;
-                printf("Remaining data: %d\n", remain_data);
+                //printf("Remaining data: %d\n", remain_data);
                 if (remain_data <= 0){
                   fclose(f_recv);
                 }
@@ -1328,8 +1155,8 @@ int client(char *port)
           }
           else {
             // we got some data from server 
-            printf("Data from Server: %s\n", buf);
-            char to_be_tokenized[256];
+            //printf("Data from Server: %s\n", buf);
+            char to_be_tokenized[300];
             strcpy(to_be_tokenized, buf);
             
             char *token;
@@ -1346,10 +1173,10 @@ int client(char *port)
               c->online = 1;
               c->blocked = NULL;
               c->mlist = NULL;
-              
+
               //No need to add details of client already in list
-              if (findClient_ip_port(onlineClients, c->ip, c->port) != NULL){
-                printf("Client already present:%s %s\n", c->ip, c->port);
+              if (onlineClients != NULL && findClient_ip_port(onlineClients, c->ip, c->port) != NULL){
+                //printf("Client already present:%s %s\n", c->ip, c->port);
                 free(c);
               }
               else{
@@ -1359,7 +1186,7 @@ int client(char *port)
             
             //MESSAGE RECEIVED FROM ANOTHER CLIENT VIA SERVER
             else if (strcmp(token, "<SEND>") == 0){
-              char header[20], sender_ip[16], msg[256];
+              char header[20], sender_ip[16], msg[300];
               sscanf(buf, "%s %s %[^\r\n]", header, sender_ip, msg);
               cse4589_print_and_log("[RECEIVED:SUCCESS]\n");
               cse4589_print_and_log("msg from:%s\n[msg]:%s\n", sender_ip, msg);
